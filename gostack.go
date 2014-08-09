@@ -9,14 +9,16 @@ import (
 	"time"
 )
 
+// GoroutineState represents a recognized state of a goroutine.
 type GoroutineState string
 
+// Recognized goroutine states.
 const (
 	Running       GoroutineState = "running"
+	Runnable      GoroutineState = "runnable"
 	ChanRecv      GoroutineState = "chan receive"
 	ChanSend      GoroutineState = "chan send"
 	FinalizerWait GoroutineState = "finalizer wait"
-	Runnable      GoroutineState = "runnable"
 	Select        GoroutineState = "select"
 	Sleep         GoroutineState = "sleep"
 	Syscall       GoroutineState = "syscall"
@@ -24,15 +26,23 @@ const (
 )
 
 var (
+	// GoroutineStates is a list of recognized goroutine states such as
+	// "running" and "sleep".
+	GoroutineStates = []GoroutineState{
+		Running, Runnable, ChanRecv, ChanSend, Select, Sleep, Syscall, IOWait, FinalizerWait,
+	}
+
 	gStateEnd  = []byte{']', ':', '\n'} // end of goroutine state
 	commaSpace = []byte{',', ' '}
 )
 
+// Profile is a goroutine stack profile.
 type Profile struct {
 	Created    time.Time
 	Goroutines []*Goroutine
 }
 
+// Goroutine is a goroutine's metadata and stack.
 type Goroutine struct {
 	ID      int
 	State   GoroutineState
@@ -40,6 +50,7 @@ type Goroutine struct {
 	Stack   []*StackFrame
 }
 
+// StackFrame is a single frame in a goroutine's stack.
 type StackFrame struct {
 	Line1      string
 	Line2      string
@@ -116,6 +127,10 @@ func scanBlocked(data []byte, atEOF bool) (int, []byte, error) {
 	return 0, nil, nil
 }
 
+// ReadProfile parses a goroutine stack profile from an io.Reader and returns a
+// Profile. A partial Profile is returned even when errors occur.
+//
+// Call Debug(true) to see verbose output from profile parsing.
 func ReadProfile(r io.Reader) (*Profile, error) {
 	p := &Profile{Created: time.Now()}
 	scanner := bufio.NewScanner(r)
@@ -131,7 +146,7 @@ func ReadProfile(r io.Reader) (*Profile, error) {
 		}
 		g := &Goroutine{}
 		p.Goroutines = append(p.Goroutines, g)
-		fmt.Printf("- Added goroutine (total: %d)\n", len(p.Goroutines))
+		debug("New goroutine (total: %d)\n", len(p.Goroutines))
 
 		// Goroutine ID
 		if !scanner.Scan() {
@@ -142,7 +157,7 @@ func ReadProfile(r io.Reader) (*Profile, error) {
 		if err != nil {
 			return p, fmt.Errorf(`goroutine ID "%s" could not be parsed: %v`, scanner.Text(), err)
 		}
-		fmt.Printf("- Goroutine ID: %d\n", g.ID)
+		debug("- Goroutine ID: %d\n", g.ID)
 
 		// State
 		scanner.Split(scanGState)
@@ -150,7 +165,7 @@ func ReadProfile(r io.Reader) (*Profile, error) {
 			return p, fmt.Errorf(`expected goroutine state when error occurred: %v`, scanner.Err())
 		}
 		g.State = GoroutineState(scanner.Text())
-		fmt.Printf("- Goroutine state: %s\n", g.State)
+		debug("- Goroutine state: %s", g.State)
 
 		// Blocked duration
 		scanner.Split(scanBlocked)
@@ -162,7 +177,7 @@ func ReadProfile(r io.Reader) (*Profile, error) {
 			if err != nil {
 				return p, fmt.Errorf(`blocked duration "%s" could not be parsed: %v`, scanner.Text(), scanner.Err())
 			}
-			fmt.Printf("- Goroutine blocked: %d\n", g.Blocked)
+			debug("- Goroutine blocked: %d", g.Blocked)
 		}
 
 		// Stack frames
@@ -177,20 +192,19 @@ func ReadProfile(r io.Reader) (*Profile, error) {
 			}
 			if len(scanner.Bytes()) == 0 {
 				// End of Goroutine
-				fmt.Println("break")
+				debug("End of Goroutine %d", g.ID)
 				break
 			}
 			s := &StackFrame{}
 			g.Stack = append(g.Stack, s)
 			s.Line1 = scanner.Text()
-			fmt.Printf("- Stack line 1/%d: %.10s\n", len(g.Stack), s.Line1)
+			debug("- Stack line 1/%d: %.20s", len(g.Stack), s.Line1)
 			if !scanner.Scan() {
 				return p, fmt.Errorf(`expected first stack frame line when error occurred: %v`, scanner.Err())
 			}
 			s.Line2 = scanner.Text()
-			fmt.Printf("- Stack line 2/%d: %.10s\n", len(g.Stack), s.Line2)
+			debug("- Stack line 2/%d: %.20s", len(g.Stack), s.Line2)
 		}
-		fmt.Println(">>> start over! <<<")
 	}
 
 	return p, nil
