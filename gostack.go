@@ -1,11 +1,10 @@
-package main
+package gostack
 
 import (
 	"bufio"
 	"bytes"
 	"fmt"
 	"io"
-	"os"
 	"strconv"
 	"time"
 )
@@ -195,10 +194,4 @@ func ReadProfile(r io.Reader) (*Profile, error) {
 	}
 
 	return p, nil
-}
-
-func main() {
-	p, err := ReadProfile(os.Stdin)
-	fmt.Println(p)
-	fmt.Println(err)
 }
