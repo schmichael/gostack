@@ -51,6 +51,7 @@ type StackFrame struct {
 	LineNumber int
 }
 
+// scanGState implements bufio.SplitFunc to parse the Goroutine State.
 func scanGState(data []byte, atEOF bool) (int, []byte, error) {
 	if len(data) == 0 && atEOF {
 		return 0, nil, fmt.Errorf("unexpected EOF")
@@ -74,6 +75,7 @@ func scanGState(data []byte, atEOF bool) (int, []byte, error) {
 	return 0, nil, nil
 }
 
+// scanBlocked implements bufio.SplitFunc to parse the Goroutine State.
 func scanBlocked(data []byte, atEOF bool) (int, []byte, error) {
 	if len(data) == 0 && atEOF {
 		return 0, nil, fmt.Errorf("unexpected EOF")
