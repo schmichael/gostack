@@ -130,6 +130,11 @@ func scanBlocked(data []byte, atEOF bool) (int, []byte, error) {
 // ReadProfile parses a goroutine stack profile from an io.Reader and returns a
 // Profile. A partial Profile is returned even when errors occur.
 //
+// Currently, this function only supports goroutine profiles generated with verbosity/debug level of
+// 2. This means that the code that originally generated the goroutine profile should look like
+// myProfile.WriteTo(w, 2) . The example contained in this package demonstrates this. Also see the
+// docs for runtime/pprof/*Profile.WriteTo in the standard library.
+//
 // Call Debug(true) to see verbose output from profile parsing.
 func ReadProfile(r io.Reader) (*Profile, error) {
 	p := &Profile{Created: time.Now()}
