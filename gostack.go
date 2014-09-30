@@ -110,7 +110,12 @@ func scanBlocked(data []byte, atEOF bool) (int, []byte, error) {
 		for i, b := range data[2:len(data)] {
 			if b == ' ' {
 				// End of number
-				return 2 + i + len(" minutes]:\n"), data[2 : 2+i], nil // 2 == len(commaSpace)
+				adv, slc := 2+i+len(" minutes]:\n"), data[2:2+i] // 2 == len(commaSpace)
+				if adv > len(data) {
+					// buffer doesn't actually include entire blocking bit, so ask for more
+					return 0, nil, nil
+				}
+				return adv, slc, nil
 			}
 			if b < '0' || b > '9' {
 				// Something went wrong
