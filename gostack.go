@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -23,13 +24,14 @@ const (
 	Sleep         GoroutineState = "sleep"
 	Syscall       GoroutineState = "syscall"
 	IOWait        GoroutineState = "IO wait"
+	SemAcquire    GoroutineState = "semacquire"
 )
 
 var (
 	// GoroutineStates is a list of recognized goroutine states such as
 	// "running" and "sleep".
 	GoroutineStates = []GoroutineState{
-		Running, Runnable, ChanRecv, ChanSend, Select, Sleep, Syscall, IOWait, FinalizerWait,
+		Running, Runnable, ChanRecv, ChanSend, Select, Sleep, Syscall, IOWait, FinalizerWait, SemAcquire,
 	}
 
 	gStateEnd  = []byte{']', ':', '\n'} // end of goroutine state
@@ -40,6 +42,7 @@ var (
 type Profile struct {
 	Created    time.Time
 	Goroutines []*Goroutine
+	StackCount map[string]int // Count of top call in stack frames
 }
 
 // Goroutine is a goroutine's metadata and stack.
@@ -142,7 +145,10 @@ func scanBlocked(data []byte, atEOF bool) (int, []byte, error) {
 //
 // Call Debug(true) to see verbose output from profile parsing.
 func ReadProfile(r io.Reader) (*Profile, error) {
-	p := &Profile{Created: time.Now()}
+	p := &Profile{
+		Created:    time.Now(),
+		StackCount: make(map[string]int),
+	}
 	scanner := bufio.NewScanner(r)
 
 	for {
@@ -191,29 +197,37 @@ func ReadProfile(r io.Reader) (*Profile, error) {
 		}
 
 		// Stack frames
-		scanner.Split(bufio.ScanLines)
-		for {
-			if !scanner.Scan() {
-				if scanner.Err() != nil {
-					return p, fmt.Errorf(`expected first stack frame line, blank line, or EOF when error occurred: %v`, scanner.Err())
+		{
+			scanner.Split(bufio.ScanLines)
+			top := true
+			for {
+				if !scanner.Scan() {
+					if scanner.Err() != nil {
+						return p, fmt.Errorf(`expected first stack frame line, blank line, or EOF when error occurred: %v`, scanner.Err())
+					}
+					// EOF, exit cleanly
+					return p, nil
 				}
-				// EOF, exit cleanly
-				return p, nil
+				if len(scanner.Bytes()) == 0 {
+					// End of Goroutine
+					debug("End of Goroutine %d", g.ID)
+					break
+				}
+				s := &StackFrame{}
+				g.Stack = append(g.Stack, s)
+				s.Line1 = scanner.Text()
+				debug("- Stack line 1/%d: %.20s", len(g.Stack), s.Line1)
+
+				if !scanner.Scan() {
+					return p, fmt.Errorf(`expected first stack frame line when error occurred: %v`, scanner.Err())
+				}
+				s.Line2 = strings.TrimSpace(scanner.Text())
+				debug("- Stack line 2/%d: %.20s", len(g.Stack), s.Line2)
+				if top {
+					p.StackCount[s.Line2]++
+					top = false
+				}
 			}
-			if len(scanner.Bytes()) == 0 {
-				// End of Goroutine
-				debug("End of Goroutine %d", g.ID)
-				break
-			}
-			s := &StackFrame{}
-			g.Stack = append(g.Stack, s)
-			s.Line1 = scanner.Text()
-			debug("- Stack line 1/%d: %.20s", len(g.Stack), s.Line1)
-			if !scanner.Scan() {
-				return p, fmt.Errorf(`expected first stack frame line when error occurred: %v`, scanner.Err())
-			}
-			s.Line2 = scanner.Text()
-			debug("- Stack line 2/%d: %.20s", len(g.Stack), s.Line2)
 		}
 	}
 
