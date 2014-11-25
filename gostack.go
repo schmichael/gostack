@@ -42,7 +42,7 @@ var (
 type Profile struct {
 	Created    time.Time
 	Goroutines []*Goroutine
-	StackCount map[string]int // Count of top call in stack frames
+	StackCount map[string]int // Count of bottom call in stack frames
 }
 
 // Goroutine is a goroutine's metadata and stack.
@@ -199,7 +199,7 @@ func ReadProfile(r io.Reader) (*Profile, error) {
 		// Stack frames
 		{
 			scanner.Split(bufio.ScanLines)
-			top := true
+			var s *StackFrame
 			for {
 				if !scanner.Scan() {
 					if scanner.Err() != nil {
@@ -213,7 +213,7 @@ func ReadProfile(r io.Reader) (*Profile, error) {
 					debug("End of Goroutine %d", g.ID)
 					break
 				}
-				s := &StackFrame{}
+				s = &StackFrame{}
 				g.Stack = append(g.Stack, s)
 				s.Line1 = scanner.Text()
 				debug("- Stack line 1/%d: %.20s", len(g.Stack), s.Line1)
@@ -223,10 +223,9 @@ func ReadProfile(r io.Reader) (*Profile, error) {
 				}
 				s.Line2 = strings.TrimSpace(scanner.Text())
 				debug("- Stack line 2/%d: %.20s", len(g.Stack), s.Line2)
-				if top {
-					p.StackCount[s.Line2]++
-					top = false
-				}
+			}
+			if s != nil {
+				p.StackCount[s.Line2]++
 			}
 		}
 	}
